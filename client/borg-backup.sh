@@ -102,6 +102,42 @@ backup_borg() {
 	fi
 }
 
+domongodb() {
+        local START
+        local STOP
+        local DIFF
+        local DESTNAME
+        local -a options=(
+            --quiet
+        )
+
+        if tty -s; then
+                options=( "${options[@]/(--quiet)}" )
+        fi
+
+        START=$(date +%s.%N)
+        echo "Starting mongodb backup"
+        mkdir -p $BORGLOCAL_MONGODB_BACKUPPATH
+        # remove previous, already stored in backup, no need to cumulate
+        rm -rf $BORGLOCAL_MONGODB_BACKUPPATH/mongodb-backup-*
+        DESTNAME=mongodb-backup-$(date "+%Y%m%d-%H%M%S")
+        ${BORGLOCAL_MONGODB_PARAMS:=" "}
+        $BORGLOCAL_MONGODB_EXECDUMP ${BORGLOCAL_MONGODB_PARAMS} "${options[@]}" --out "${BORGLOCAL_MONGODB_BACKUPPATH}/${DESTNAME}" && tar -C $BORGLOCAL_MONGODB_BACKUPPATH -czf ${BORGLOCAL_MONGODB_BACKUPPATH}/${DESTNAME}.tar.gz ${DESTNAME}
+        if [[ $? -ne 0 ]]
+        then
+                BORGLOCAL_FAILED=1
+                echo "Mongodb failed"
+                echo "1" > "${BORGLOCAL_RESULTDIR}/mongodb"
+        else
+                echo "0" > "${BORGLOCAL_RESULTDIR}/mongodb"
+        fi
+        END=$(date +%s.%N)
+        DIFF=$(echo "$END - $START" | bc)
+        echo "Mongodb backup took: $DIFF seconds"
+        echo "$DIFF" > "${BORGLOCAL_RESULTDIR}/mongodb-time"
+        rm -rf ${BORGLOCAL_MONGODB_BACKUPPATH}/${DESTNAME}
+}
+
 domysql() {
 	local -a options=(
 		--defaults-extra-file=${SCRIPT_DIR}/my.cnf
@@ -147,7 +183,7 @@ dobackup() {
 	echo "Starting backup"
 	mkdir -p "${BORGLOCAL_RESULTDIR}"
 
-	if [[ $BORGLOCAL_DO_MYSQL -eq 1 ]]
+	if [[ ${BORGLOCAL_DO_MYSQL:-0} -eq 1 ]]
 	then
 		domysql
 		if [[ $BORGLOCAL_FAILED -ne 0 ]]
@@ -156,6 +192,15 @@ dobackup() {
 		fi
 	fi
 
+	if [[ ${BORGLOCAL_DO_MONGODB:-0} -eq 1 ]]
+	then
+		domongodb
+		if [[ $BORGLOCAL_FAILED -ne 0 ]]
+		then
+			exit 2
+		fi
+	fi
+	
 	for fs in "${BORGLOCAL_EXCLUDEMOUNTS[@]}"; do
 		BORGLOCAL_EXCLUDE+="sh:$fs/*"$'\n'
 	done

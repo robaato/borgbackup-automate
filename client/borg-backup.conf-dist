@@ -31,11 +31,16 @@ export BORG_REPO=${BORGLOCAL_USERNAME}@${BORGLOCAL_SERVER}:${BORGLOCAL_NAME}-bac
 export BORGLOCAL_PRUNE="--keep-daily=14 --keep-weekly=12 --keep-monthly=12 --keep-yearly=2"
 export BORGLOCAL_EXEC=/opt/borg/borg
 
-export BORGLOCAL_DO_MYSQL=1
+export BORGLOCAL_DO_MYSQL=0
 export BORGLOCAL_MYSQL_BACKUPPATH=${BORGLOCAL_CACHEDIR}'/mysql'
 export BORGLOCAL_MYSQL_USER=root
 export BORGLOCAL_MYSQL_PASSWORD='this_is_root_mysql_password'
 export BORGLOCAL_MYSQL_EXECDUMP='/usr/bin/mysqldump'
+
+export BORGLOCAL_DO_MONGODB=0
+export BORGLOCAL_MONGODB_BACKUPPATH=${BORGLOCAL_CACHEDIR}'/mongodb'
+export BORGLOCAL_MONGODB_EXECDUMP='/usr/bin/mongodump'
+export BORGLOCAL_MONGODB_PARAMS=
 
 export BORGLOCAL_EXCLUDEMOUNTS=(
     /tmp
