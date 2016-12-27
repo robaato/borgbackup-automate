@@ -1,0 +1,63 @@
+#!/bin/bash
+[[ $0 != "$BASH_SOURCE" ]] && sourced=1 || sourced=0
+
+if [[ $sourced -eq 0 ]]
+then
+        echo "This is a config script supposed to be sourced ONLY!"
+        exit 1
+fi
+
+export BORG_PASSPHRASE='this_is_a_passphrase'
+export BORG_DISPLAY_PASSPHRASE=y
+export BORG_RSH='ssh -i /etc/borg/host_key'
+export BORG_KEYS_DIR='/etc/borg/keys'
+export BORGLOCAL_CACHEDIR='/var/cache/borg'
+export BORG_CACHE_DIR="${BORGLOCAL_CACHEDIR}/cache"
+export BORGLOCAL_RESULTDIR="${BORGLOCAL_CACHEDIR}/results"
+export BORGLOCAL_STATEDIR="${BORGLOCAL_CACHEDIR}/state"
+export BORG_FILES_CACHE_TTL=50
+export BORGLOCAL_SERVER=backup-server.example.com
+export BORGLOCAL_USERNAME=borg
+export BORGLOCAL_NAME=my-server
+export BORGLOCAL_SOURCE=(
+        /
+        /boot
+        /var
+        )
+export BORGLOCAL_LAST_CHECK=7
+export BORGLOCAL_COMPRESSION=zlib,5
+export BORGLOCAL_NOPRUNE=0
+export BORG_REPO=${BORGLOCAL_USERNAME}@${BORGLOCAL_SERVER}:${BORGLOCAL_NAME}-backup
+export BORGLOCAL_PRUNE="--keep-daily=14 --keep-weekly=12 --keep-monthly=12 --keep-yearly=2"
+export BORGLOCAL_EXEC=/opt/borg/borg
+
+export BORGLOCAL_DO_MYSQL=1
+export BORGLOCAL_MYSQL_BACKUPPATH=${BORGLOCAL_CACHEDIR}'/mysql'
+export BORGLOCAL_MYSQL_USER=root
+export BORGLOCAL_MYSQL_PASSWORD='this_is_root_mysql_password'
+export BORGLOCAL_MYSQL_EXECDUMP='/usr/bin/mysqldump'
+
+export BORGLOCAL_EXCLUDEMOUNTS=(
+    /tmp
+    /sys
+    /dev
+    /proc
+    /run
+    /mnt
+    /media
+    /var/lib/nfs/rpc_pipefs
+    /var/lib/lxcfs
+    )
+
+IFS='' read -r -d '' BORGLOCAL_EXCLUDE <<EOF || true
+sh:/home/*/.cache/*
+sh:/root/.cache/*
+sh:/var/cache/borg/cache/*
+sh:/var/cache/apt/archives/*
+sh:/var/tmp/*
+sh:/var/lib/mysql/*
+sh:/tmp/*
+EOF
+
+export BORGLOCAL_EXCLUDE
+

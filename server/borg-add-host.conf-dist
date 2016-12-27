@@ -1,0 +1,15 @@
+#!/bin/bash
+[[ $0 != "$BASH_SOURCE" ]] && sourced=1 || sourced=0
+
+if [[ $sourced -eq 0 ]]
+then
+        echo "This is a config script supposed to be sourced ONLY!"
+        exit 1
+fi
+
+# Define suffix for key comments
+export BORGLOCAL_KEYCOMMENT=":borg@backup"
+export BORGLOCAL_BACKUP_PATH='/mnt/backup'
+export BORGLOCAL_USER=borg
+
+#END
