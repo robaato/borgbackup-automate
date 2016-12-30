@@ -20,6 +20,8 @@ fi
 
 source "${SCRIPT_DIR}/borg-backup.conf"
 
+BORGLOCAL_SCRIPTVERSION="1.0.1"
+
 #this part is for fixing UPGRADE path
 [[ -z ${BORGLOCAL_RESULTDIR+1} ]] && export BORGLOCAL_RESULTDIR="${BORGLOCAL_CACHEDIR}/results"
 [[ -z ${BORGLOCAL_STATEDIR+1} ]] && export  BORGLOCAL_STATEDIR="${BORGLOCAL_CACHEDIR}/state"
@@ -43,6 +45,7 @@ backup_borg() {
 		--compression ${BORGLOCAL_COMPRESSION}
 		--stats
 		--exclude-from "${BORGLOCAL_CACHEDIR}/exclude-list-borg"
+		--one-file-system
 		)
 	# timing part
 	local START
@@ -62,7 +65,7 @@ backup_borg() {
 	${BORGLOCAL_EXEC} create "${options[@]}" "::${BORGLOCAL_NAME}-$(date "+%Y%m%d-%H%M%S")" ${BORGLOCAL_SOURCE[@]} 
 	LASTRES=$?
 	END=$(date +%s.%N)
-	DIFF=$(echo "$END - $START" | bc)
+	DIFF=$(echo "$END $START" | awk '{print $1-$2}')
 	echo "$DIFF" > "${BORGLOCAL_RESULTDIR}/create-time"
 	echo "Create took $DIFF seconds"
 	if [[ $LASTRES -eq 0 ]]
@@ -80,7 +83,7 @@ backup_borg() {
 	# we don't care about real pipe result, as it will be usually 1 due to grep
 	LASTRES=${PIPESTATUS[0]}
 	END=$(date +%s.%N)
-	DIFF=$(echo "$END - $START" | bc)
+	DIFF=$(echo "$END $START" | awk '{print $1-$2}')
 	echo "$DIFF" > "${BORGLOCAL_RESULTDIR}/check-time"
 	echo "Check took $DIFF seconds"
 	if [[ $LASTRES -eq 0 ]]
@@ -92,7 +95,7 @@ backup_borg() {
 			START=$(date +%s.%N)
 			${BORGLOCAL_EXEC} prune -s -v ${BORGLOCAL_PRUNE}
 			END=$(date +%s.%N)
-			DIFF=$(echo "$END - $START" | bc)
+			DIFF=$(echo "$END $START" | awk '{print $1-$2}')
 			echo "$DIFF" > "${BORGLOCAL_RESULTDIR}/prune-time"
 			echo "Prune took $DIFF seconds"
 		fi
@@ -107,12 +110,16 @@ domongodb() {
         local STOP
         local DIFF
         local DESTNAME
+        local -a roptions=(--quiet)
         local -a options=(
             --quiet
         )
 
+        # older mongodump does not have --quiet option, and also needs a tty
+        script -qc "$BORGLOCAL_MONGODB_EXECDUMP --help" | grep -e "--quiet"  > /dev/null 2>&1 || options=( "${options[@]/$roptions}" )
+
         if tty -s; then
-                options=( "${options[@]/(--quiet)}" )
+                options=( "${options[@]/$roptions}" )
         fi
 
         START=$(date +%s.%N)
@@ -122,7 +129,7 @@ domongodb() {
         rm -rf $BORGLOCAL_MONGODB_BACKUPPATH/mongodb-backup-*
         DESTNAME=mongodb-backup-$(date "+%Y%m%d-%H%M%S")
         ${BORGLOCAL_MONGODB_PARAMS:=" "}
-        $BORGLOCAL_MONGODB_EXECDUMP ${BORGLOCAL_MONGODB_PARAMS} "${options[@]}" --out "${BORGLOCAL_MONGODB_BACKUPPATH}/${DESTNAME}" && tar -C $BORGLOCAL_MONGODB_BACKUPPATH -czf ${BORGLOCAL_MONGODB_BACKUPPATH}/${DESTNAME}.tar.gz ${DESTNAME}
+        $BORGLOCAL_MONGODB_EXECDUMP ${BORGLOCAL_MONGODB_PARAMS} ${options[@]} --out "${BORGLOCAL_MONGODB_BACKUPPATH}/${DESTNAME}" && tar -C $BORGLOCAL_MONGODB_BACKUPPATH -czf ${BORGLOCAL_MONGODB_BACKUPPATH}/${DESTNAME}.tar.gz ${DESTNAME}
         if [[ $? -ne 0 ]]
         then
                 BORGLOCAL_FAILED=1
@@ -132,7 +139,7 @@ domongodb() {
                 echo "0" > "${BORGLOCAL_RESULTDIR}/mongodb"
         fi
         END=$(date +%s.%N)
-        DIFF=$(echo "$END - $START" | bc)
+        DIFF=$(echo "$END $START" | awk '{print $1-$2}')
         echo "Mongodb backup took: $DIFF seconds"
         echo "$DIFF" > "${BORGLOCAL_RESULTDIR}/mongodb-time"
         rm -rf ${BORGLOCAL_MONGODB_BACKUPPATH}/${DESTNAME}
@@ -173,15 +180,16 @@ domysql() {
 		echo "0" > "${BORGLOCAL_RESULTDIR}/mysql"
 	fi
 	END=$(date +%s.%N)
-	DIFF=$(echo "$END - $START" | bc)
+	DIFF=$(echo "$END $START" | awk '{print $1-$2}')
 	echo "MYSQL backup took: $DIFF seconds"
 	echo "$DIFF" > "${BORGLOCAL_RESULTDIR}/mysql-time"
 }
 
 
 dobackup() {
-	echo "Starting backup"
+	echo "Starting backup, script version: ${BORGLOCAL_SCRIPTVERSION}"
 	mkdir -p "${BORGLOCAL_RESULTDIR}"
+	echo "${BORGLOCAL_SCRIPTVERSION}" >> "${BORGLOCAL_RESULTDIR}/script"
 
 	if [[ ${BORGLOCAL_DO_MYSQL:-0} -eq 1 ]]
 	then
@@ -268,7 +276,7 @@ listlast() {
 
 
 checkall() {
-	${BORGLOCAL_EXEC} check --info
+	${BORGLOCAL_EXEC} check --info 2>&1 | grep -Ev "^Remote:\s*(Checking segments.*)?$"
 }
 
 wrapborg() {
